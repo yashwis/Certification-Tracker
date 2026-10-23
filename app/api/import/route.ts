@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     for (const item of parsed) unique.set(item.key, item);
     const cases = markMutual([...unique.values()]);
     if (!validateCases(cases)) throw new Error("The imported test-case data is invalid.");
-    if (form.get("mode") === "preview") return NextResponse.json({ cases, summary: summarize(cases), files: files.map(file => file.name) });
+    if (form.get("mode") === "preview") return NextResponse.json({ summary: summarize(cases), files: files.map(file => file.name) });
     if (!storageConfigured()) return NextResponse.json({ error: "Connect a Vercel Blob store before applying imports." }, { status: 503 });
     const current = await readState();
     const byKey = new Map(current.cases.map(item => [item.key, item]));
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const incomingKeys = new Set(merged.map(item => item.key));
     const next = [...current.cases.filter(item => !incomingKeys.has(item.key)), ...merged];
     await writeState(next, current.etag);
-    return NextResponse.json({ cases: merged, summary: summarize(merged), files: files.map(file => file.name) });
+    return NextResponse.json({ summary: summarize(merged), files: files.map(file => file.name) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not import files." }, { status: 400 });
   }
