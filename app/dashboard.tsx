@@ -13,7 +13,7 @@ function Distribution({label,rows}:{label:string;rows:CertificationCase[]}){cons
 
 export default function Dashboard({initialData}:{initialData:DashboardPayload}){
  const [payload,setPayload]=useState(initialData),[cert,setCert]=useState<"ALL"|Certification>("PAC"),[scope,setScope]=useState<"in"|"out"|"all">("in"),[status,setStatus]=useState("all"),[query,setQuery]=useState(""),[page,setPage]=useState(1),[expanded,setExpanded]=useState<string|null>(null);
- const [admin,setAdmin]=useState(false),[adminOpen,setAdminOpen]=useState(false),[password,setPassword]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false),[files,setFiles]=useState<File[]>([]),[preview,setPreview]=useState<{cases:CertificationCase[];summary:Record<string,number>;files:string[]}|null>(null),[saved,setSaved]=useState(false);
+ const [admin,setAdmin]=useState(false),[adminOpen,setAdminOpen]=useState(false),[password,setPassword]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false),[files,setFiles]=useState<File[]>([]),[preview,setPreview]=useState<{summary:Record<string,number>;files:string[]}|null>(null),[saved,setSaved]=useState(false);
  const refresh=async()=>{try{const r=await fetch("/api/cases",{cache:"no-store"});if(r.ok)setPayload(await r.json() as DashboardPayload)}catch{}};
  useEffect(()=>{refresh();fetch("/api/admin/session").then(r=>r.json() as Promise<{admin:boolean}>).then(v=>setAdmin(Boolean(v.admin))).catch(()=>{});const timer=window.setInterval(refresh,30000);return()=>window.clearInterval(timer)},[]);
  const pac=useMemo(()=>payload.cases.filter(r=>r.certification==="PAC"&&r.inScope),[payload]),ap=useMemo(()=>payload.cases.filter(r=>r.certification==="AP"&&r.inScope),[payload]);
@@ -23,7 +23,20 @@ export default function Dashboard({initialData}:{initialData:DashboardPayload}){
  async function login(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});const body=await r.json() as {error?:string};setBusy(false);if(!r.ok)return setError(body.error||"Could not sign in.");setAdmin(true);setPassword("")}
  async function logout(){await fetch("/api/admin/session",{method:"DELETE"});setAdmin(false);setAdminOpen(false)}
  async function updateCase(row:CertificationCase,patch:{status?:string;inScope?:boolean}){const previous=payload;setPayload(v=>({...v,cases:v.cases.map(item=>item.key===row.key?{...item,...patch}:item)}));const r=await fetch("/api/cases",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:row.key,...patch})});if(!r.ok){setPayload(previous);const body=await r.json() as {error?:string};setError(body.error||"Could not update test case.")}}
- async function importFiles(mode:"preview"|"apply"){if(!files.length)return;setBusy(true);setError("");setSaved(false);const form=new FormData();files.forEach(file=>form.append("files",file));form.append("mode",mode);const r=await fetch("/api/import",{method:"POST",body:form});const body=await r.json() as {error?:string;cases:CertificationCase[];summary:Record<string,number>;files:string[]};setBusy(false);if(!r.ok)return setError(body.error||"Could not import files.");if(mode==="preview")setPreview(body);else{setPreview(null);setFiles([]);setSaved(true);await refresh()}}
+ async function importFiles(mode:"preview"|"apply"){
+  if(!files.length)return;
+  setBusy(true);setError("");setSaved(false);
+  try{
+   const form=new FormData();files.forEach(file=>form.append("files",file));form.append("mode",mode);
+   const r=await fetch("/api/import",{method:"POST",body:form});
+   const contentType=r.headers.get("content-type")||"";
+   const body=contentType.includes("application/json")?await r.json() as {error?:string;summary:Record<string,number>;files:string[]}:null;
+   if(!r.ok)throw new Error(body?.error||`Import failed (${r.status}). Check the Vercel function logs and try again.`);
+   if(!body)throw new Error("The server returned an unexpected response. Please retry the import.");
+   if(mode==="preview")setPreview(body);else{setPreview(null);setFiles([]);setSaved(true);await refresh()}
+  }catch(err){setError(err instanceof Error?err.message:"Could not import files.")}
+  finally{setBusy(false)}
+ }
  const nav=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:"smooth",block:"start"});
  return <main>
   <header className="topbar"><div className="brand"><span>N</span><div><strong>Niubiz Certification</strong><small>PAC & AP test-case tracker</small></div></div><nav><button onClick={()=>nav("overview")}>Overview</button><button onClick={()=>nav("chart")}>Status Chart</button><button onClick={()=>nav("cases")}>Test Cases</button></nav><div className="top-actions"><span className="scope-badge">{pac.length+ap.length} In-Scope Records</span><button className="upload-button" onClick={()=>{setAdminOpen(true);setError("")}}><Settings2 size={16}/>{admin?"Admin":"Admin sign in"}</button></div></header>
