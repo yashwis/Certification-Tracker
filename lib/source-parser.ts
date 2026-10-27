@@ -169,15 +169,20 @@ export function markMutual(cases: CertificationCase[]) {
 }
 
 export function mergeImportedCases(currentCases: CertificationCase[], importedCases: CertificationCase[]) {
-  const byKey = new Map(currentCases.map(item => [item.key, item]));
-  const merged = importedCases.map(item => {
-    const current = byKey.get(item.key);
-    return current
-      ? { ...item, status: current.status, inScope: current.inScope, updatedAt: new Date().toISOString() }
-      : item;
-  });
-  const incomingKeys = new Set(merged.map(item => item.key));
-  return markMutual([...currentCases.filter(item => !incomingKeys.has(item.key)), ...merged]);
+  const incomingKeys = new Set(importedCases.map(item => item.key));
+  return markMutual([...currentCases.filter(item => !incomingKeys.has(item.key)), ...importedCases]);
+}
+
+export function prepareForPacWorkbookRefresh(currentCases: CertificationCase[], passedApIds: ReadonlySet<string>) {
+  return currentCases
+    .filter(item => item.certification === "AP" && item.category !== "Mutual PAC/AP")
+    .map(item => ({
+      ...item,
+      status: passedApIds.has(item.testId) ? "Pass" : "Not Executed Yet",
+      inScope: true,
+      isMutual: false,
+      updatedAt: new Date().toISOString(),
+    }));
 }
 
 export function validateCases(value: unknown): value is CertificationCase[] {
