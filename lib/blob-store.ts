@@ -1,4 +1,4 @@
-import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
+import { get, put } from "@vercel/blob";
 import seed from "../data/certification-seed.json";
 import type { CertificationCase } from "./types";
 
@@ -17,43 +17,27 @@ export async function readState(): Promise<{ cases: CertificationCase[]; etag?: 
   return { cases, etag: result.blob.etag, stored: true };
 }
 
-export async function writeState(cases: CertificationCase[], etag?: string) {
-  try {
-    return await put(DATA_PATH, JSON.stringify(cases), {
-      access: "private",
-      allowOverwrite: true,
-      cacheControlMaxAge: 60,
-      contentType: "application/json",
-      ...(etag ? { ifMatch: etag } : {}),
-    });
-  } catch (error) {
-    if (error instanceof BlobPreconditionFailedError) {
-      throw new Error("The dashboard changed while this update was being saved. Refresh and try again.");
-    }
-    throw error;
-  }
+export async function writeState(cases: CertificationCase[]) {
+  return put(DATA_PATH, JSON.stringify(cases), {
+    access: "private",
+    allowOverwrite: true,
+    cacheControlMaxAge: 60,
+    contentType: "application/json",
+  });
 }
 
 export async function patchStoredCase(key: string, updates: { status?: string; inScope?: boolean }) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const current = await readState();
-    const index = current.cases.findIndex(item => item.key === key);
-    if (index < 0) throw new Error("Test case was not found.");
-    const updated = { ...current.cases[index], ...updates, updatedAt: new Date().toISOString() };
-    const cases = [...current.cases];
-    cases[index] = updated;
-    try {
-      await writeState(cases, current.etag);
-      const confirmed = await readState();
-      const saved = confirmed.cases.find(item => item.key === key);
-      if (!saved || (updates.status !== undefined && saved.status !== updates.status) || (updates.inScope !== undefined && saved.inScope !== updates.inScope)) {
-        throw new Error("The saved status could not be confirmed. Please try again.");
-      }
-      return saved;
-    } catch (error) {
-      const conflicted = error instanceof Error && error.message.startsWith("The dashboard changed while this update was being saved");
-      if (!conflicted || attempt === 1) throw error;
-    }
+  const current = await readState();
+  const index = current.cases.findIndex(item => item.key === key);
+  if (index < 0) throw new Error("Test case was not found.");
+  const updated = { ...current.cases[index], ...updates, updatedAt: new Date().toISOString() };
+  const cases = [...current.cases];
+  cases[index] = updated;
+  await writeState(cases);
+  const confirmed = await readState();
+  const saved = confirmed.cases.find(item => item.key === key);
+  if (!saved || (updates.status !== undefined && saved.status !== updates.status) || (updates.inScope !== undefined && saved.inScope !== updates.inScope)) {
+    throw new Error("The saved status could not be confirmed. Please try again.");
   }
-  throw new Error("Could not update test case.");
+  return saved;
 }
