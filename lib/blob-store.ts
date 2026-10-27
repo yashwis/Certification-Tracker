@@ -1,6 +1,7 @@
 import { get, put } from "@vercel/blob";
 import seed from "../data/certification-seed.json";
 import type { CertificationCase } from "./types";
+import { applyCaseUpdate, type CaseUpdate } from "./case-update";
 
 const DATA_PATH = "niubiz-certification/dashboard-state.json";
 
@@ -26,11 +27,11 @@ export async function writeState(cases: CertificationCase[]) {
   });
 }
 
-export async function patchStoredCase(key: string, updates: { status?: string; inScope?: boolean }) {
+export async function patchStoredCase(key: string, updates: CaseUpdate) {
   const current = await readState();
   const index = current.cases.findIndex(item => item.key === key);
   if (index < 0) throw new Error("Test case was not found.");
-  const updated = { ...current.cases[index], ...updates, updatedAt: new Date().toISOString() };
+  const updated = { ...applyCaseUpdate(current.cases[index], updates), updatedAt: new Date().toISOString() };
   const cases = [...current.cases];
   cases[index] = updated;
   await writeState(cases);
