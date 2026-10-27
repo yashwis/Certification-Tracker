@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { CUTOFF, type CertificationCase } from "./types";
+import { CUTOFF, type CertificationCase } from "./types.ts";
 
 const clean = (value: unknown) => value == null ? "" : String(value).trim();
 
@@ -141,6 +141,18 @@ export function markMutual(cases: CertificationCase[]) {
   const pacIds = new Set(cases.filter(item => item.certification === "PAC").map(item => item.testId));
   const apIds = new Set(cases.filter(item => item.certification === "AP").map(item => item.testId));
   return cases.map(item => ({ ...item, isMutual: pacIds.has(item.testId) && apIds.has(item.testId) }));
+}
+
+export function mergeImportedCases(currentCases: CertificationCase[], importedCases: CertificationCase[]) {
+  const byKey = new Map(currentCases.map(item => [item.key, item]));
+  const merged = importedCases.map(item => {
+    const current = byKey.get(item.key);
+    return current
+      ? { ...item, status: current.status, inScope: current.inScope, updatedAt: new Date().toISOString() }
+      : item;
+  });
+  const incomingKeys = new Set(merged.map(item => item.key));
+  return markMutual([...currentCases.filter(item => !incomingKeys.has(item.key)), ...merged]);
 }
 
 export function validateCases(value: unknown): value is CertificationCase[] {
