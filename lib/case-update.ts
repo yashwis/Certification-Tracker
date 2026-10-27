@@ -19,3 +19,11 @@ export function restoreMissingScope<T extends { key: string; inScope?: boolean }
     ? item as T & { inScope: boolean }
     : { ...item, inScope: defaultScopes.get(item.key) ?? true });
 }
+
+export function selectVersionedCases<T>(stored: unknown, version: string, fallback: T[]) {
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    const value = stored as { version?: unknown; cases?: unknown };
+    if (value.version === version && Array.isArray(value.cases)) return { cases: value.cases as T[], needsMigration: false };
+  }
+  return { cases: fallback, needsMigration: true };
+}
