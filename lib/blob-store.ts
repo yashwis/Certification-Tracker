@@ -35,12 +35,25 @@ export async function writeState(cases: CertificationCase[], etag?: string) {
 }
 
 export async function patchStoredCase(key: string, updates: { status?: string; inScope?: boolean }) {
-  const current = await readState();
-  const index = current.cases.findIndex(item => item.key === key);
-  if (index < 0) throw new Error("Test case was not found.");
-  const updated = { ...current.cases[index], ...updates, updatedAt: new Date().toISOString() };
-  const cases = [...current.cases];
-  cases[index] = updated;
-  await writeState(cases, current.etag);
-  return updated;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const current = await readState();
+    const index = current.cases.findIndex(item => item.key === key);
+    if (index < 0) throw new Error("Test case was not found.");
+    const updated = { ...current.cases[index], ...updates, updatedAt: new Date().toISOString() };
+    const cases = [...current.cases];
+    cases[index] = updated;
+    try {
+      await writeState(cases, current.etag);
+      const confirmed = await readState();
+      const saved = confirmed.cases.find(item => item.key === key);
+      if (!saved || (updates.status !== undefined && saved.status !== updates.status) || (updates.inScope !== undefined && saved.inScope !== updates.inScope)) {
+        throw new Error("The saved status could not be confirmed. Please try again.");
+      }
+      return saved;
+    } catch (error) {
+      const conflicted = error instanceof Error && error.message.startsWith("The dashboard changed while this update was being saved");
+      if (!conflicted || attempt === 1) throw error;
+    }
+  }
+  throw new Error("Could not update test case.");
 }
