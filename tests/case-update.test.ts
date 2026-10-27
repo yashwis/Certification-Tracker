@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyCaseUpdate, definedCaseUpdate } from "../lib/case-update.ts";
+import { applyCaseUpdate, definedCaseUpdate, restoreMissingScope } from "../lib/case-update.ts";
 
 const original = {
   key: "PAC:TC-001",
@@ -50,4 +50,15 @@ test("status-only result keeps scope through JSON persistence", () => {
   const saved = JSON.parse(JSON.stringify(applyCaseUpdate(original, definedCaseUpdate({ status: "Pass" }))));
   assert.equal(saved.status, "Pass");
   assert.equal(saved.inScope, true);
+});
+
+test("previously damaged records recover their known scope", () => {
+  const damaged = JSON.parse('{"key":"PAC:TC-001","status":"Pass"}');
+  const [recovered] = restoreMissingScope([damaged], new Map([["PAC:TC-001", true]]));
+  assert.equal(recovered.inScope, true);
+});
+
+test("scope recovery never overwrites an explicit admin scope", () => {
+  const [recovered] = restoreMissingScope([{ ...original, inScope: false }], new Map([[original.key, true]]));
+  assert.equal(recovered.inScope, false);
 });
