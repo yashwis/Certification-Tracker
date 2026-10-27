@@ -123,7 +123,10 @@ export function parseApTemplate(buffer: ArrayBuffer, sourceFile: string, passedI
   const responseCol = col(["RESPONSE/ ERROR CODE", "RESPONSE / ERROR CODE"]), initiatedCol = col(["TXN INITIATED BY"]);
   const typeCol = col(["TYPE"]), commentsCol = col(["TEST COMMENTS"]);
   const scopeCol = col(["IN SCOPE", "SCOPE"]);
-  const category = sourceFile.toLowerCase().includes("beneficiary") ? "Beneficiary Bank" : sourceFile.toLowerCase().includes("remitter") ? "Remitter Bank" : "AP";
+  const normalizedSourceFile = sourceFile.toLowerCase().replace(/[^a-z]/g, "");
+  const sourceCategory = normalizedSourceFile.includes("beneficiary") || normalizedSourceFile.includes("beneficary")
+    ? "Beneficiary Bank"
+    : normalizedSourceFile.includes("remitter") ? "Remitter Bank" : "AP";
   const seen = new Set<string>();
   const cases: CertificationCase[] = [];
   rows.slice(headerIndex + 1).forEach((row, index) => {
@@ -131,6 +134,9 @@ export function parseApTemplate(buffer: ArrayBuffer, sourceFile: string, passedI
     if (!testId) return;
     if (seen.has(testId)) throw new Error(`Duplicate AP Test ID in ${sourceFile}: ${testId}`);
     seen.add(testId);
+    const category = sourceCategory !== "AP"
+      ? sourceCategory
+      : /^BE[_-]/i.test(testId) ? "Beneficiary Bank" : /^RE[_-]/i.test(testId) ? "Remitter Bank" : "AP";
     cases.push({
       ...baseCase("AP", testId, sourceFile, index + 1),
       description: descCol >= 0 ? clean(row[descCol]) : "",
