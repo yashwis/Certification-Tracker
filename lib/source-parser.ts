@@ -137,6 +137,18 @@ export function parseApTemplate(buffer: ArrayBuffer, sourceFile: string, passedI
   return cases;
 }
 
+export function combineApTemplateCases(groups: CertificationCase[][]) {
+  const combined: CertificationCase[] = [];
+  const sourceByKey = new Map<string, string>();
+  for (const group of groups) for (const item of group) {
+    const previousSource = sourceByKey.get(item.key);
+    if (previousSource) throw new Error(`Duplicate AP Test ID ${item.testId} across ${previousSource} and ${item.sourceFile}.`);
+    sourceByKey.set(item.key, item.sourceFile);
+    combined.push(item);
+  }
+  return combined;
+}
+
 export function markMutual(cases: CertificationCase[]) {
   const pacIds = new Set(cases.filter(item => item.certification === "PAC").map(item => item.testId));
   const apIds = new Set(cases.filter(item => item.certification === "AP").map(item => item.testId));
