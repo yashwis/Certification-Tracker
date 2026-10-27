@@ -1,5 +1,3 @@
-export const CUTOFF = "2026-10-12";
-
 export type Certification = "PAC" | "AP";
 
 export type CertificationCase = {
