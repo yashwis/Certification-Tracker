@@ -61,7 +61,7 @@ export default function Dashboard({initialData}:{initialData:DashboardPayload}){
   setFiles(current=>{const next=new Map(current.map(file=>[file.name,file]));selected.forEach(file=>next.set(file.name,file));return [...next.values()]});
   setPreview(null);setSaved(false);setError("");
  }
- const fileKind=(name:string)=>name.toLowerCase().endsWith(".xlsx")?"PAC workbook":name.toLowerCase().includes("remitter")?"AP Remitter":name.toLowerCase().includes("beneficiary")?"AP Beneficiary":"Unclassified AP CSV";
+ const fileKind=(name:string)=>{const normalized=name.toLowerCase().replace(/[^a-z]/g,"");return name.toLowerCase().endsWith(".xlsx")?"PAC workbook":normalized.includes("remitter")?"AP Remitter":normalized.includes("beneficiary")||normalized.includes("beneficary")?"AP Beneficiary":"Unclassified AP CSV"};
  const nav=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:"smooth",block:"start"});
  return <main>
   <header className="topbar"><div className="brand"><span>N</span><div><strong>Niubiz Certification</strong><small>PAC & AP test-case tracker</small></div></div><nav><button onClick={()=>nav("overview")}>Overview</button><button onClick={()=>nav("chart")}>Status Chart</button><button onClick={()=>nav("cases")}>Test Cases</button></nav><div className="top-actions"><span className="scope-badge">PAC {pct(pacPass,pac.length)} · AP {pct(apPass,ap.length)} passed</span><button className="upload-button" onClick={()=>{setAdminOpen(true);setError("")}}><Settings2 size={16}/>{admin?"Admin":"Admin sign in"}</button></div></header>
