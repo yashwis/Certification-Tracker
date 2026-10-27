@@ -1,9 +1,10 @@
 import { get, put } from "@vercel/blob";
 import seed from "../data/certification-seed.json";
 import type { CertificationCase } from "./types";
-import { applyCaseUpdate, type CaseUpdate } from "./case-update";
+import { applyCaseUpdate, restoreMissingScope, type CaseUpdate } from "./case-update";
 
 const DATA_PATH = "niubiz-certification/dashboard-state.json";
+const DEFAULT_SCOPES = new Map((seed as CertificationCase[]).map(item => [item.key, item.inScope]));
 
 export function storageConfigured() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
@@ -14,7 +15,8 @@ export async function readState(): Promise<{ cases: CertificationCase[]; etag?: 
   const result = await get(DATA_PATH, { access: "private", useCache: false });
   if (!result) return { cases: seed as CertificationCase[], stored: false };
   if (result.statusCode !== 200) throw new Error(`Could not read shared dashboard data (${result.statusCode}).`);
-  const cases = await new Response(result.stream).json() as CertificationCase[];
+  const storedCases = await new Response(result.stream).json() as CertificationCase[];
+  const cases = restoreMissingScope(storedCases, DEFAULT_SCOPES);
   return { cases, etag: result.blob.etag, stored: true };
 }
 
