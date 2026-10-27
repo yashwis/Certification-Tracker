@@ -8,7 +8,7 @@ function pacWorkbook(rows: unknown[][], passedIds: string[] = []) {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["PAC certification template"],
-    ["Date", "Test ID", "Details", "Description", "Status", "Reserved", "Category", "Reserved", "Initiated By", "Flow Type", "Expected Result", "Reserved", "Remarks"],
+    ["Date", "Test ID", "Details", "Description", "Status", "Reserved", "Category", "Reserved", "Initiated By", "Flow Type", "Expected Result", "Reserved", "Remarks", "In Scope"],
     ...rows,
   ]), "Main Tracker");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["Test Case"], ...passedIds.map(id => [id])]), "Our AP");
@@ -49,20 +49,30 @@ function caseRow(overrides: Partial<CertificationCase>): CertificationCase {
   };
 }
 
-test("a new PAC row creates PAC and AP records with cutoff scope", () => {
+test("PAC scope is explicit and does not depend on the test date", () => {
   const parsed = parsePacWorkbook(pacWorkbook([
     ["2026-10-12", "TC-IN", "", "In-scope case"],
-    ["2026-10-13", "TC-OUT", "", "Out-of-scope case"],
+    ["2026-10-13", "TC-LATER", "", "Later in-scope case"],
+    ["2026-10-10", "TC-OUT", "", "Explicitly excluded case", "Not Executed Yet", "", "", "", "", "", "", "", "", "No"],
   ]), "PAC-Certification-Template.xlsx");
 
-  assert.equal(parsed.pac.length, 2);
-  assert.equal(parsed.mutualAp.length, 2);
+  assert.equal(parsed.pac.length, 3);
+  assert.equal(parsed.mutualAp.length, 3);
   assert.equal(parsed.pac[0].inScope, true);
   assert.equal(parsed.mutualAp[0].inScope, true);
-  assert.equal(parsed.pac[1].inScope, false);
-  assert.equal(parsed.mutualAp[1].inScope, false);
+  assert.equal(parsed.pac[1].inScope, true);
+  assert.equal(parsed.mutualAp[1].inScope, true);
+  assert.equal(parsed.pac[2].inScope, false);
+  assert.equal(parsed.mutualAp[2].inScope, false);
   assert.equal(parsed.pac[0].status, "Not Executed Yet");
   assert.equal(parsed.mutualAp[0].isMutual, true);
+});
+
+test("invalid explicit scope values are rejected", () => {
+  assert.throws(
+    () => parsePacWorkbook(pacWorkbook([["2026-10-13", "TC-BAD", "", "Bad scope", "Not Executed Yet", "", "", "", "", "", "", "", "", "Maybe"]]), "PAC.xlsx"),
+    /Invalid In Scope value for TC-BAD/,
+  );
 });
 
 test("a new AP row gets the correct defaults and category", () => {
