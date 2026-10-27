@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "../../../lib/admin-auth";
-import { combineApTemplateCases, markMutual, mergeImportedCases, missingApCatalogCategories, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh, validateCases } from "../../../lib/source-parser";
+import { certificationWorkbookKind, combineApTemplateCases, markMutual, mergeImportedCases, parseApTemplate, parseApWorkbook, parsePacWorkbook, validateCases } from "../../../lib/source-parser";
 import { readState, storageConfigured, writeState } from "../../../lib/blob-store";
 import type { CertificationCase } from "../../../lib/types";
 
@@ -16,19 +16,26 @@ export async function POST(request: Request) {
     if (files.some(file => file.size > 15 * 1024 * 1024)) return NextResponse.json({ error: "Each file must be 15 MB or smaller." }, { status: 400 });
     const parsed: CertificationCase[] = [];
     const apGroups: CertificationCase[][] = [];
-    let passedIds = new Set<string>();
     let pacWorkbookUploaded = false;
+    let apWorkbookUploaded = false;
     for (const file of files) {
       const buffer = await file.arrayBuffer();
       if (file.name.toLowerCase().endsWith(".xlsx")) {
-        const result = parsePacWorkbook(buffer, file.name);
-        parsed.push(...result.pac, ...result.mutualAp);
-        passedIds = result.passedApIds;
-        pacWorkbookUploaded = true;
+        const kind = certificationWorkbookKind(buffer);
+        if (kind === "PAC") {
+          if (pacWorkbookUploaded) throw new Error("Choose only one PAC workbook per import.");
+          parsed.push(...parsePacWorkbook(buffer, file.name).pac);
+          pacWorkbookUploaded = true;
+        } else {
+          if (apWorkbookUploaded) throw new Error("Choose only one AP workbook per import.");
+          parsed.push(...parseApWorkbook(buffer, file.name));
+          apWorkbookUploaded = true;
+        }
       }
     }
-    for (const file of files) if (file.name.toLowerCase().endsWith(".csv")) apGroups.push(parseApTemplate(await file.arrayBuffer(), file.name, passedIds));
+    for (const file of files) if (file.name.toLowerCase().endsWith(".csv")) apGroups.push(parseApTemplate(await file.arrayBuffer(), file.name));
     parsed.push(...combineApTemplateCases(apGroups));
+    if (!parsed.length) throw new Error("No test cases were found. Upload a PAC or AP .xlsx workbook.");
     const unique = new Map<string, CertificationCase>();
     for (const item of parsed) unique.set(item.key, item);
     const cases = markMutual([...unique.values()]);
@@ -36,13 +43,9 @@ export async function POST(request: Request) {
     let next = cases;
     if (storageConfigured()) {
       const current = await readState();
-      if (pacWorkbookUploaded) {
-        const missingApCategories = missingApCatalogCategories(current.cases, cases);
-        if (missingApCategories.length) {
-          throw new Error(`AP catalog is incomplete. Add the ${missingApCategories.join(" and ")} CSV file${missingApCategories.length > 1 ? "s" : ""} with the PAC workbook.`);
-        }
-      }
-      const base = pacWorkbookUploaded ? prepareForPacWorkbookRefresh(current.cases, passedIds) : current.cases;
+      let base = current.cases;
+      if (pacWorkbookUploaded) base = base.filter(item => item.certification !== "PAC");
+      if (apWorkbookUploaded) base = base.filter(item => item.certification !== "AP");
       next = mergeImportedCases(base, cases);
     }
     if (form.get("mode") === "preview") return NextResponse.json({ summary: summarize(next), files: files.map(file => file.name) });

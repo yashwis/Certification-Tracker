@@ -1,17 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { combineApTemplateCases, mergeImportedCases, missingApCatalogCategories, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh } from "../lib/source-parser.ts";
+import { certificationWorkbookKind, combineApTemplateCases, mergeImportedCases, parseApTemplate, parseApWorkbook, parsePacWorkbook } from "../lib/source-parser.ts";
 import type { CertificationCase } from "../lib/types.ts";
 
-function pacWorkbook(rows: unknown[][], passedIds: string[] = []) {
+function pacWorkbook(rows: unknown[][]) {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ["PAC certification template"],
     ["Date", "Test ID", "Details", "Description", "Status", "Reserved", "Category", "Reserved", "Initiated By", "Flow Type", "Expected Result", "Reserved", "Remarks", "In Scope"],
     ...rows,
   ]), "Main Tracker");
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["Test Case"], ...passedIds.map(id => [id])]), "Our AP");
+  return XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+}
+
+function apWorkbook(rows: unknown[][]) {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["AP certification template"],
+    ["Date", "Test ID", "Details", "Description", "Status", "In Scope", "Category", "Transaction Status", "Test Steps", "Response / Error Code", "Initiated By", "Flow Type", "Expected Result", "Remarks"],
+    ...rows,
+  ]), "AP Tracker");
   return XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
 }
 
@@ -57,15 +66,28 @@ test("PAC scope is explicit and does not depend on the test date", () => {
   ]), "PAC-Certification-Template.xlsx");
 
   assert.equal(parsed.pac.length, 3);
-  assert.equal(parsed.mutualAp.length, 3);
   assert.equal(parsed.pac[0].inScope, true);
-  assert.equal(parsed.mutualAp[0].inScope, true);
   assert.equal(parsed.pac[1].inScope, true);
-  assert.equal(parsed.mutualAp[1].inScope, true);
   assert.equal(parsed.pac[2].inScope, false);
-  assert.equal(parsed.mutualAp[2].inScope, false);
   assert.equal(parsed.pac[0].status, "Not Executed Yet");
-  assert.equal(parsed.mutualAp[0].isMutual, true);
+});
+
+test("PAC and AP workbooks are detected by their sheet names", () => {
+  assert.equal(certificationWorkbookKind(pacWorkbook([["2026-10-12", "TC-1"]])), "PAC");
+  assert.equal(certificationWorkbookKind(apWorkbook([["2026-10-12", "TC-1"]])), "AP");
+});
+
+test("AP workbook owns AP status and scope independently", () => {
+  const parsed = parseApWorkbook(apWorkbook([
+    ["2026-10-12", "TC-MUTUAL", "", "Mutual case", "Pass", "Yes", "Mutual PAC/AP"],
+    ["2026-10-13", "BE_01", "", "Beneficiary case", "Blocked", "No", "Beneficiary Bank"],
+  ]), "AP-Certification-Template.xlsx");
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].status, "Pass");
+  assert.equal(parsed[0].inScope, true);
+  assert.equal(parsed[1].status, "Blocked");
+  assert.equal(parsed[1].inScope, false);
+  assert.equal(parsed[1].category, "Beneficiary Bank");
 });
 
 test("invalid explicit scope values are rejected", () => {
@@ -116,20 +138,6 @@ test("re-importing a row uses the uploaded status and scope", () => {
   assert.equal(merged.description, "Updated description");
 });
 
-test("PAC workbook refresh removes stale PAC rows and refreshes AP-only successes", () => {
-  const current = [
-    caseRow({ key: "PAC:OLD", testId: "OLD" }),
-    caseRow({ key: "AP:OLD", certification: "AP", testId: "OLD", category: "Mutual PAC/AP" }),
-    caseRow({ key: "AP:RE_01", certification: "AP", testId: "RE_01", category: "Remitter Bank", status: "Pass", inScope: false }),
-    caseRow({ key: "AP:BE_01", certification: "AP", testId: "BE_01", category: "Beneficiary Bank", status: "Blocked", inScope: false }),
-  ];
-  const prepared = prepareForPacWorkbookRefresh(current, new Set(["BE_01"]));
-  assert.equal(prepared.length, 2);
-  assert.equal(prepared.find(item => item.testId === "RE_01")?.status, "Not Executed Yet");
-  assert.equal(prepared.find(item => item.testId === "BE_01")?.status, "Pass");
-  assert.equal(prepared.every(item => item.inScope), true);
-});
-
 test("adding one row leaves unrelated existing rows unchanged", () => {
   const existing = caseRow({ key: "PAC:EXISTING", testId: "EXISTING", status: "Fail" });
   const added = caseRow({ key: "AP:ADDED", certification: "AP", testId: "ADDED" });
@@ -147,13 +155,3 @@ test("duplicate IDs across AP templates are rejected instead of overwritten", ()
   );
 });
 
-test("a first PAC refresh identifies missing AP catalog files", () => {
-  const pacOnly = [caseRow({}), caseRow({ key: "AP:TC-NEW", certification: "AP", category: "Mutual PAC/AP" })];
-  assert.deepEqual(missingApCatalogCategories([], pacOnly), ["Remitter Bank", "Beneficiary Bank"]);
-
-  const remitter = caseRow({ key: "AP:RE_01", certification: "AP", testId: "RE_01", category: "Remitter Bank" });
-  assert.deepEqual(missingApCatalogCategories([], [...pacOnly, remitter]), ["Beneficiary Bank"]);
-
-  const beneficiary = caseRow({ key: "AP:BE_01", certification: "AP", testId: "BE_01", category: "Beneficiary Bank" });
-  assert.deepEqual(missingApCatalogCategories([remitter], [...pacOnly, beneficiary]), []);
-});

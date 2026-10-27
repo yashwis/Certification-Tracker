@@ -53,14 +53,9 @@ function baseCase(certification: "PAC" | "AP", testId: string, sourceFile: strin
 export function parsePacWorkbook(buffer: ArrayBuffer, sourceFile: string) {
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true, cellFormula: true });
   const mainSheet = workbook.Sheets["Main Tracker"];
-  const apSheet = workbook.Sheets["Our AP"];
-  if (!mainSheet || !apSheet) throw new Error('PAC workbook must contain "Main Tracker" and "Our AP" sheets.');
+  if (!mainSheet) throw new Error('PAC workbook must contain a "Main Tracker" sheet.');
   const main = XLSX.utils.sheet_to_json<unknown[]>(mainSheet, { header: 1, raw: true, defval: "" });
-  const ap = XLSX.utils.sheet_to_json<unknown[]>(apSheet, { header: 1, raw: true, defval: "" });
   if (clean(main[1]?.[0]) !== "Date" || clean(main[1]?.[1]) !== "Test ID") throw new Error('"Main Tracker" must have Date and Test ID in row 2.');
-  if (clean(ap[0]?.[0]) !== "Test Case") throw new Error('"Our AP" must have Test Case in cell A1.');
-
-  const passedApIds = new Set(ap.slice(1).map(row => clean(row[0])).filter(Boolean));
   const mainHeaders = main[1].map(value => clean(value).toUpperCase());
   const scopeCol = mainHeaders.findIndex(value => ["IN SCOPE", "SCOPE"].includes(value));
   const pac: CertificationCase[] = [];
@@ -88,25 +83,57 @@ export function parsePacWorkbook(buffer: ArrayBuffer, sourceFile: string) {
     pac.push(item);
   });
   if (!pac.length) throw new Error("No PAC test cases were found.");
+  return { pac };
+}
 
-  const mutualAp: CertificationCase[] = pac.map((source, index) => {
-    const testId = source.testId;
-    return {
-      ...baseCase("AP", testId, sourceFile, 1000 + index),
-      description: source.description,
-      status: passedApIds.has(testId) ? "Pass" : "Not Executed Yet",
-      inScope: source.inScope,
-      isMutual: true,
-      category: "Mutual PAC/AP",
-      date: source.date,
-      details: source.details,
-      initiatedBy: source.initiatedBy,
-      flowType: source.flowType,
-      expectedResult: source.expectedResult,
-      remarks: source.remarks,
-    };
+export function certificationWorkbookKind(buffer: ArrayBuffer): "PAC" | "AP" {
+  const workbook = XLSX.read(buffer, { type: "array", bookSheets: true });
+  if (workbook.SheetNames.includes("Main Tracker")) return "PAC";
+  if (workbook.SheetNames.includes("AP Tracker")) return "AP";
+  throw new Error('Workbook must contain either a "Main Tracker" sheet for PAC or an "AP Tracker" sheet for AP.');
+}
+
+export function parseApWorkbook(buffer: ArrayBuffer, sourceFile: string) {
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const sheet = workbook.Sheets["AP Tracker"];
+  if (!sheet) throw new Error('AP workbook must contain an "AP Tracker" sheet.');
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: "" });
+  const headerIndex = rows.findIndex(row => row.some(cell => clean(cell).toUpperCase() === "TEST ID"));
+  if (headerIndex < 0) throw new Error('"AP Tracker" must contain a "Test ID" column.');
+  const headers = rows[headerIndex].map(value => clean(value).toUpperCase());
+  const col = (names: string[]) => headers.findIndex(value => names.includes(value));
+  const idCol = col(["TEST ID"]), dateCol = col(["DATE"]), descCol = col(["DESCRIPTION", "TEST DESCRIPTION"]);
+  const statusCol = col(["STATUS", "RESULT"]), scopeCol = col(["IN SCOPE", "SCOPE"]), categoryCol = col(["CATEGORY"]);
+  const detailsCol = col(["DETAILS"]), txnCol = col(["TRANSACTION STATUS", "TXN STATUS"]), stepsCol = col(["TEST STEPS"]);
+  const responseCol = col(["RESPONSE / ERROR CODE", "RESPONSE/ ERROR CODE"]), initiatedCol = col(["INITIATED BY", "TXN INITIATED BY"]);
+  const flowCol = col(["FLOW TYPE", "TYPE"]), expectedCol = col(["EXPECTED RESULT"]), remarksCol = col(["REMARKS", "TEST COMMENTS"]);
+  const seen = new Set<string>();
+  const cases: CertificationCase[] = [];
+  rows.slice(headerIndex + 1).forEach((row, index) => {
+    const testId = clean(row[idCol]);
+    if (!testId) return;
+    if (seen.has(testId)) throw new Error(`Duplicate AP Test ID: ${testId}`);
+    seen.add(testId);
+    const status = statusCol >= 0 ? clean(row[statusCol]) || "Not Executed Yet" : "Not Executed Yet";
+    cases.push({
+      ...baseCase("AP", testId, sourceFile, index + 1),
+      date: dateCol >= 0 ? isoDate(row[dateCol]) : "",
+      description: descCol >= 0 ? clean(row[descCol]) : "",
+      status,
+      inScope: explicitScope(scopeCol >= 0 ? row[scopeCol] : "", status, testId),
+      category: categoryCol >= 0 ? clean(row[categoryCol]) || "AP" : "AP",
+      details: detailsCol >= 0 ? clean(row[detailsCol]) : "",
+      txnStatus: txnCol >= 0 ? clean(row[txnCol]) : "",
+      testSteps: stepsCol >= 0 ? clean(row[stepsCol]) : "",
+      responseCode: responseCol >= 0 ? clean(row[responseCol]) : "",
+      initiatedBy: initiatedCol >= 0 ? clean(row[initiatedCol]) : "",
+      flowType: flowCol >= 0 ? clean(row[flowCol]) : "",
+      expectedResult: expectedCol >= 0 ? clean(row[expectedCol]) : "",
+      remarks: remarksCol >= 0 ? clean(row[remarksCol]) : "",
+    });
   });
-  return { pac, mutualAp, passedApIds };
+  if (!cases.length) throw new Error("No AP test cases were found in the AP workbook.");
+  return cases;
 }
 
 export function parseApTemplate(buffer: ArrayBuffer, sourceFile: string, passedIds = new Set<string>()) {
@@ -177,27 +204,6 @@ export function markMutual(cases: CertificationCase[]) {
 export function mergeImportedCases(currentCases: CertificationCase[], importedCases: CertificationCase[]) {
   const incomingKeys = new Set(importedCases.map(item => item.key));
   return markMutual([...currentCases.filter(item => !incomingKeys.has(item.key)), ...importedCases]);
-}
-
-export function prepareForPacWorkbookRefresh(currentCases: CertificationCase[], passedApIds: ReadonlySet<string>) {
-  return currentCases
-    .filter(item => item.certification === "AP" && item.category !== "Mutual PAC/AP")
-    .map(item => ({
-      ...item,
-      status: passedApIds.has(item.testId) ? "Pass" : "Not Executed Yet",
-      inScope: true,
-      isMutual: false,
-      updatedAt: new Date().toISOString(),
-    }));
-}
-
-export function missingApCatalogCategories(currentCases: CertificationCase[], importedCases: CertificationCase[]) {
-  const available = new Set(
-    [...currentCases, ...importedCases]
-      .filter(item => item.certification === "AP")
-      .map(item => item.category),
-  );
-  return ["Remitter Bank", "Beneficiary Bank"].filter(category => !available.has(category));
 }
 
 export function validateCases(value: unknown): value is CertificationCase[] {
