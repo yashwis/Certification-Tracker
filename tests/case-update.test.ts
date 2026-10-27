@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyCaseUpdate, definedCaseUpdate, restoreMissingScope } from "../lib/case-update.ts";
+import { applyCaseUpdate, definedCaseUpdate, restoreMissingScope, selectVersionedCases } from "../lib/case-update.ts";
 
 const original = {
   key: "PAC:TC-001",
@@ -61,4 +61,14 @@ test("previously damaged records recover their known scope", () => {
 test("scope recovery never overwrites an explicit admin scope", () => {
   const [recovered] = restoreMissingScope([{ ...original, inScope: false }], new Map([[original.key, true]]));
   assert.equal(recovered.inScope, false);
+});
+
+test("an old stored dataset is replaced once by the new workbook version", () => {
+  const fallback = [{ key: "PAC:NEW" }];
+  assert.deepEqual(selectVersionedCases([{ key: "PAC:OLD" }], "v2", fallback), { cases: fallback, needsMigration: true });
+});
+
+test("admin changes persist after the workbook version is current", () => {
+  const cases = [{ key: "PAC:NEW", status: "Blocked" }];
+  assert.deepEqual(selectVersionedCases({ version: "v2", cases }, "v2", []), { cases, needsMigration: false });
 });
