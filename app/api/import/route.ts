@@ -56,5 +56,5 @@ export async function POST(request: Request) {
 
 function summarize(cases: CertificationCase[]) {
   const pac = cases.filter(item => item.certification === "PAC"), ap = cases.filter(item => item.certification === "AP");
-  return { pacCases: pac.length, pacInScope: pac.filter(item => item.inScope).length, apCases: ap.length, apInScope: ap.filter(item => item.inScope).length, mutual: ap.filter(item => item.isMutual).length };
+  return { pacCases: pac.length, pacInScope: pac.filter(item => item.inScope).length, pacPassed: pac.filter(item => item.inScope && item.status === "Pass").length, apCases: ap.length, apInScope: ap.filter(item => item.inScope).length, apPassed: ap.filter(item => item.inScope && item.status === "Pass").length, mutual: ap.filter(item => item.isMutual).length };
 }
