@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "../../../lib/admin-auth";
-import { combineApTemplateCases, markMutual, mergeImportedCases, parseApTemplate, parsePacWorkbook, validateCases } from "../../../lib/source-parser";
+import { combineApTemplateCases, markMutual, mergeImportedCases, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh, validateCases } from "../../../lib/source-parser";
 import { readState, storageConfigured, writeState } from "../../../lib/blob-store";
 import type { CertificationCase } from "../../../lib/types";
 
@@ -17,12 +17,14 @@ export async function POST(request: Request) {
     const parsed: CertificationCase[] = [];
     const apGroups: CertificationCase[][] = [];
     let passedIds = new Set<string>();
+    let pacWorkbookUploaded = false;
     for (const file of files) {
       const buffer = await file.arrayBuffer();
       if (file.name.toLowerCase().endsWith(".xlsx")) {
         const result = parsePacWorkbook(buffer, file.name);
         parsed.push(...result.pac, ...result.mutualAp);
         passedIds = result.passedApIds;
+        pacWorkbookUploaded = true;
       }
     }
     for (const file of files) if (file.name.toLowerCase().endsWith(".csv")) apGroups.push(parseApTemplate(await file.arrayBuffer(), file.name, passedIds));
@@ -34,7 +36,8 @@ export async function POST(request: Request) {
     if (form.get("mode") === "preview") return NextResponse.json({ summary: summarize(cases), files: files.map(file => file.name) });
     if (!storageConfigured()) return NextResponse.json({ error: "Connect a Vercel Blob store before applying imports." }, { status: 503 });
     const current = await readState();
-    const next = mergeImportedCases(current.cases, cases);
+    const base = pacWorkbookUploaded ? prepareForPacWorkbookRefresh(current.cases, passedIds) : current.cases;
+    const next = mergeImportedCases(base, cases);
     await writeState(next);
     return NextResponse.json({ summary: summarize(cases), files: files.map(file => file.name) });
   } catch (error) {
