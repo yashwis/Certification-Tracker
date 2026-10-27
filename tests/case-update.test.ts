@@ -72,3 +72,8 @@ test("admin changes persist after the workbook version is current", () => {
   const cases = [{ key: "PAC:NEW", status: "Blocked" }];
   assert.deepEqual(selectVersionedCases({ version: "v2", cases }, "v2", []), { cases, needsMigration: false });
 });
+
+test("legacy Blob data remains available when no private seed is bundled", () => {
+  const legacy = [{ key: "PAC:EXISTING" }];
+  assert.deepEqual(selectVersionedCases(legacy, "v2", []), { cases: legacy, needsMigration: false });
+});
