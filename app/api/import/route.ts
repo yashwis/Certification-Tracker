@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "../../../lib/admin-auth";
-import { markMutual, parseApTemplate, parsePacWorkbook, validateCases } from "../../../lib/source-parser";
+import { markMutual, mergeImportedCases, parseApTemplate, parsePacWorkbook, validateCases } from "../../../lib/source-parser";
 import { readState, storageConfigured, writeState } from "../../../lib/blob-store";
 import type { CertificationCase } from "../../../lib/types";
 
@@ -32,15 +32,9 @@ export async function POST(request: Request) {
     if (form.get("mode") === "preview") return NextResponse.json({ summary: summarize(cases), files: files.map(file => file.name) });
     if (!storageConfigured()) return NextResponse.json({ error: "Connect a Vercel Blob store before applying imports." }, { status: 503 });
     const current = await readState();
-    const byKey = new Map(current.cases.map(item => [item.key, item]));
-    const merged = cases.map(item => {
-      const current = byKey.get(item.key);
-      return current ? { ...item, status: current.status, inScope: current.inScope, isMutual: current.isMutual || item.isMutual, updatedAt: new Date().toISOString() } : item;
-    });
-    const incomingKeys = new Set(merged.map(item => item.key));
-    const next = [...current.cases.filter(item => !incomingKeys.has(item.key)), ...merged];
+    const next = mergeImportedCases(current.cases, cases);
     await writeState(next);
-    return NextResponse.json({ summary: summarize(merged), files: files.map(file => file.name) });
+    return NextResponse.json({ summary: summarize(cases), files: files.map(file => file.name) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not import files." }, { status: 400 });
   }
