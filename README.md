@@ -7,7 +7,7 @@ A Next.js dashboard for tracking PAC and AP certification test cases. It provide
 - PAC is loaded from `Main Tracker`. Cases are in scope by default and are excluded only when explicitly marked out of scope.
 - AP contains all PAC cases plus the Beneficiary and Remitter templates.
 - IDs listed in `Our AP` start as `Pass`; all other AP cases start as `Not Executed Yet`.
-- Imports merge on `certification + Test ID`. Existing status and in-scope choices are preserved for matching records.
+- PAC workbook imports replace the PAC catalog and use `Our AP` as the AP success list. AP-only Remitter and Beneficiary cases remain in the catalog.
 
 The bundled dataset is generated from the approved certification workbook and AP test-case templates. No sample or dummy test cases are included.
 
