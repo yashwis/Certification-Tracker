@@ -1,9 +1,10 @@
 import { get, put } from "@vercel/blob";
 import seed from "../data/certification-seed.json";
 import type { CertificationCase } from "./types";
-import { applyCaseUpdate, restoreMissingScope, type CaseUpdate } from "./case-update";
+import { applyCaseUpdate, restoreMissingScope, selectVersionedCases, type CaseUpdate } from "./case-update";
 
 const DATA_PATH = "niubiz-certification/dashboard-state.json";
+const DATA_VERSION = "2026-10-27-explicit-scope-workbook";
 const DEFAULT_SCOPES = new Map((seed as CertificationCase[]).map(item => [item.key, item.inScope]));
 
 export function storageConfigured() {
@@ -15,13 +16,15 @@ export async function readState(): Promise<{ cases: CertificationCase[]; etag?: 
   const result = await get(DATA_PATH, { access: "private", useCache: false });
   if (!result) return { cases: seed as CertificationCase[], stored: false };
   if (result.statusCode !== 200) throw new Error(`Could not read shared dashboard data (${result.statusCode}).`);
-  const storedCases = await new Response(result.stream).json() as CertificationCase[];
-  const cases = restoreMissingScope(storedCases, DEFAULT_SCOPES);
+  const stored = await new Response(result.stream).json() as unknown;
+  const selected = selectVersionedCases<CertificationCase>(stored, DATA_VERSION, seed as CertificationCase[]);
+  const cases = restoreMissingScope(selected.cases, DEFAULT_SCOPES);
+  if (selected.needsMigration && cases.length) await writeState(cases);
   return { cases, etag: result.blob.etag, stored: true };
 }
 
 export async function writeState(cases: CertificationCase[]) {
-  return put(DATA_PATH, JSON.stringify(cases), {
+  return put(DATA_PATH, JSON.stringify({ version: DATA_VERSION, cases }), {
     access: "private",
     allowOverwrite: true,
     cacheControlMaxAge: 60,
