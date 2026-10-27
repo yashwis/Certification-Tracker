@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "../../../lib/admin-auth";
-import { markMutual, mergeImportedCases, parseApTemplate, parsePacWorkbook, validateCases } from "../../../lib/source-parser";
+import { combineApTemplateCases, markMutual, mergeImportedCases, parseApTemplate, parsePacWorkbook, validateCases } from "../../../lib/source-parser";
 import { readState, storageConfigured, writeState } from "../../../lib/blob-store";
 import type { CertificationCase } from "../../../lib/types";
 
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     if (!files.length) return NextResponse.json({ error: "Choose at least one .xlsx or .csv file." }, { status: 400 });
     if (files.some(file => file.size > 15 * 1024 * 1024)) return NextResponse.json({ error: "Each file must be 15 MB or smaller." }, { status: 400 });
     const parsed: CertificationCase[] = [];
+    const apGroups: CertificationCase[][] = [];
     let passedIds = new Set<string>();
     for (const file of files) {
       const buffer = await file.arrayBuffer();
@@ -24,7 +25,8 @@ export async function POST(request: Request) {
         passedIds = result.passedApIds;
       }
     }
-    for (const file of files) if (file.name.toLowerCase().endsWith(".csv")) parsed.push(...parseApTemplate(await file.arrayBuffer(), file.name, passedIds));
+    for (const file of files) if (file.name.toLowerCase().endsWith(".csv")) apGroups.push(parseApTemplate(await file.arrayBuffer(), file.name, passedIds));
+    parsed.push(...combineApTemplateCases(apGroups));
     const unique = new Map<string, CertificationCase>();
     for (const item of parsed) unique.set(item.key, item);
     const cases = markMutual([...unique.values()]);
