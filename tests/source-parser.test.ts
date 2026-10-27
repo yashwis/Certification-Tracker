@@ -85,6 +85,18 @@ test("a new AP row gets the correct defaults and category", () => {
   assert.equal(created.isMutual, false);
 });
 
+test("a misspelled Beneficary filename is classified as Beneficiary Bank", () => {
+  const [created] = parseApTemplate(apCsv([["BE_01", "Beneficiary case"]]), "Niubiz Certification Tracker - AP-Beneficary.csv");
+  assert.equal(created.category, "Beneficiary Bank");
+});
+
+test("BE and RE test IDs classify renamed AP files", () => {
+  const [beneficiary] = parseApTemplate(apCsv([["BE_01", "Beneficiary case"]]), "ap-cases.csv");
+  const [remitter] = parseApTemplate(apCsv([["RE_01", "Remitter case"]]), "ap-cases.csv");
+  assert.equal(beneficiary.category, "Beneficiary Bank");
+  assert.equal(remitter.category, "Remitter Bank");
+});
+
 test("a new AP row matching an existing PAC row marks both as mutual", () => {
   const pac = caseRow({ status: "Pass", inScope: true });
   const ap = caseRow({ key: "AP:TC-NEW", certification: "AP", category: "Remitter Bank", status: "Not Executed Yet" });
