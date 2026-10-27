@@ -11,4 +11,4 @@
 @media(max-width:900px){.progress-main{align-items:flex-start;flex-direction:column}.progress-metrics{grid-template-columns:1fr 1fr;gap:16px 0}.progress-metrics>div:nth-child(3){padding-left:0;border-left:0}.progress-card header{display:block}.progress-card header small{display:block;margin-top:9px;text-align:left}}
 @media(max-width:640px){.progress-section{padding-top:38px;padding-bottom:42px}.progress-card{padding:20px}.progress-number strong{font-size:42px}.progress-metrics span{white-space:normal}}
 
-.progress-metrics .out-of-scope b,.progress-metrics .out-of-scope span{color:#b54708}.progress-metrics .out-of-scope span{font-weight:700}\n
+.progress-metrics .out-of-scope b,.progress-metrics .out-of-scope span{color:#b54708}.progress-metrics .out-of-scope span{font-weight:700}
