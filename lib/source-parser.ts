@@ -185,6 +185,15 @@ export function prepareForPacWorkbookRefresh(currentCases: CertificationCase[], 
     }));
 }
 
+export function missingApCatalogCategories(currentCases: CertificationCase[], importedCases: CertificationCase[]) {
+  const available = new Set(
+    [...currentCases, ...importedCases]
+      .filter(item => item.certification === "AP")
+      .map(item => item.category),
+  );
+  return ["Remitter Bank", "Beneficiary Bank"].filter(category => !available.has(category));
+}
+
 export function validateCases(value: unknown): value is CertificationCase[] {
   if (!Array.isArray(value) || !value.length) return false;
   const keys = new Set<string>();
