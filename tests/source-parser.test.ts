@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { combineApTemplateCases, mergeImportedCases, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh } from "../lib/source-parser.ts";
+import { combineApTemplateCases, mergeImportedCases, missingApCatalogCategories, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh } from "../lib/source-parser.ts";
 import type { CertificationCase } from "../lib/types.ts";
 
 function pacWorkbook(rows: unknown[][], passedIds: string[] = []) {
@@ -133,4 +133,15 @@ test("duplicate IDs across AP templates are rejected instead of overwritten", ()
     () => combineApTemplateCases([remitter, beneficiary]),
     /Duplicate AP Test ID AP-DUP across AP-Remitter-Bank-Template.csv and AP-Beneficiary-Bank-Template.csv/,
   );
+});
+
+test("a first PAC refresh identifies missing AP catalog files", () => {
+  const pacOnly = [caseRow({}), caseRow({ key: "AP:TC-NEW", certification: "AP", category: "Mutual PAC/AP" })];
+  assert.deepEqual(missingApCatalogCategories([], pacOnly), ["Remitter Bank", "Beneficiary Bank"]);
+
+  const remitter = caseRow({ key: "AP:RE_01", certification: "AP", testId: "RE_01", category: "Remitter Bank" });
+  assert.deepEqual(missingApCatalogCategories([], [...pacOnly, remitter]), ["Beneficiary Bank"]);
+
+  const beneficiary = caseRow({ key: "AP:BE_01", certification: "AP", testId: "BE_01", category: "Beneficiary Bank" });
+  assert.deepEqual(missingApCatalogCategories([remitter], [...pacOnly, beneficiary]), []);
 });
