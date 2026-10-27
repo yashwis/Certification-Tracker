@@ -33,13 +33,16 @@ export async function POST(request: Request) {
     for (const item of parsed) unique.set(item.key, item);
     const cases = markMutual([...unique.values()]);
     if (!validateCases(cases)) throw new Error("The imported test-case data is invalid.");
-    if (form.get("mode") === "preview") return NextResponse.json({ summary: summarize(cases), files: files.map(file => file.name) });
+    let next = cases;
+    if (storageConfigured()) {
+      const current = await readState();
+      const base = pacWorkbookUploaded ? prepareForPacWorkbookRefresh(current.cases, passedIds) : current.cases;
+      next = mergeImportedCases(base, cases);
+    }
+    if (form.get("mode") === "preview") return NextResponse.json({ summary: summarize(next), files: files.map(file => file.name) });
     if (!storageConfigured()) return NextResponse.json({ error: "Connect a Vercel Blob store before applying imports." }, { status: 503 });
-    const current = await readState();
-    const base = pacWorkbookUploaded ? prepareForPacWorkbookRefresh(current.cases, passedIds) : current.cases;
-    const next = mergeImportedCases(base, cases);
     await writeState(next);
-    return NextResponse.json({ summary: summarize(cases), files: files.map(file => file.name) });
+    return NextResponse.json({ summary: summarize(next), files: files.map(file => file.name) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not import files." }, { status: 400 });
   }
