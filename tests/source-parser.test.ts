@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { mergeImportedCases, parseApTemplate, parsePacWorkbook } from "../lib/source-parser.ts";
+import { combineApTemplateCases, mergeImportedCases, parseApTemplate, parsePacWorkbook } from "../lib/source-parser.ts";
 import type { CertificationCase } from "../lib/types.ts";
 
 function pacWorkbook(rows: unknown[][], passedIds: string[] = []) {
@@ -100,4 +100,13 @@ test("adding one row leaves unrelated existing rows unchanged", () => {
   const merged = mergeImportedCases([existing], [added]);
   assert.deepEqual(merged.find(item => item.key === existing.key), existing);
   assert.equal(merged.find(item => item.key === added.key)?.status, "Not Executed Yet");
+});
+
+test("duplicate IDs across AP templates are rejected instead of overwritten", () => {
+  const remitter = parseApTemplate(apCsv([["AP-DUP", "Remitter scenario"]]), "AP-Remitter-Bank-Template.csv");
+  const beneficiary = parseApTemplate(apCsv([["AP-DUP", "Beneficiary scenario"]]), "AP-Beneficiary-Bank-Template.csv");
+  assert.throws(
+    () => combineApTemplateCases([remitter, beneficiary]),
+    /Duplicate AP Test ID AP-DUP across AP-Remitter-Bank-Template.csv and AP-Beneficiary-Bank-Template.csv/,
+  );
 });
