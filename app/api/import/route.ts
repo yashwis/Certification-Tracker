@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     });
     const incomingKeys = new Set(merged.map(item => item.key));
     const next = [...current.cases.filter(item => !incomingKeys.has(item.key)), ...merged];
-    await writeState(next, current.etag);
+    await writeState(next);
     return NextResponse.json({ summary: summarize(merged), files: files.map(file => file.name) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not import files." }, { status: 400 });
