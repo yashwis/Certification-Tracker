@@ -4,12 +4,12 @@ A Next.js dashboard for tracking PAC and AP certification test cases. It provide
 
 ## Source rules
 
-- PAC is loaded from `Main Tracker`. Cases after the configured certification cutoff are excluded from the in-scope metrics.
+- PAC is loaded from `Main Tracker`. Cases are in scope by default and are excluded only when explicitly marked out of scope.
 - AP contains all PAC cases plus the Beneficiary and Remitter templates.
 - IDs listed in `Our AP` start as `Pass`; all other AP cases start as `Not Executed Yet`.
 - Imports merge on `certification + Test ID`. Existing status and in-scope choices are preserved for matching records.
 
-No sample or dummy test cases are included.
+The bundled dataset is generated from the approved certification workbook and AP test-case templates. No sample or dummy test cases are included.
 
 ## Stack
 
@@ -31,7 +31,7 @@ No sample or dummy test cases are included.
 
 3. Copy `.env.example` to `.env.local` and provide all values. Keep `BLOB_READ_WRITE_TOKEN`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET` server-only.
 
-4. If you already have an ignored `data/certification-seed.local.json`, seed the private store:
+4. To seed the private store manually:
 
    ```bash
    pnpm storage:seed
@@ -43,7 +43,7 @@ No sample or dummy test cases are included.
    pnpm dev
    ```
 
-The public repository contains no certification records. Without a connected and seeded Blob store, the dashboard opens empty. Admin changes and imports are disabled until storage is configured.
+The dashboard opens with the approved bundled dataset and synchronizes with the connected private Blob store. Admin changes and imports require storage to be configured.
 
 ## Environment variables
 
