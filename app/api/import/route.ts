@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "../../../lib/admin-auth";
-import { combineApTemplateCases, markMutual, mergeImportedCases, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh, validateCases } from "../../../lib/source-parser";
+import { combineApTemplateCases, markMutual, mergeImportedCases, missingApCatalogCategories, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh, validateCases } from "../../../lib/source-parser";
 import { readState, storageConfigured, writeState } from "../../../lib/blob-store";
 import type { CertificationCase } from "../../../lib/types";
 
@@ -36,6 +36,12 @@ export async function POST(request: Request) {
     let next = cases;
     if (storageConfigured()) {
       const current = await readState();
+      if (pacWorkbookUploaded) {
+        const missingApCategories = missingApCatalogCategories(current.cases, cases);
+        if (missingApCategories.length) {
+          throw new Error(`AP catalog is incomplete. Add the ${missingApCategories.join(" and ")} CSV file${missingApCategories.length > 1 ? "s" : ""} with the PAC workbook.`);
+        }
+      }
       const base = pacWorkbookUploaded ? prepareForPacWorkbookRefresh(current.cases, passedIds) : current.cases;
       next = mergeImportedCases(base, cases);
     }
