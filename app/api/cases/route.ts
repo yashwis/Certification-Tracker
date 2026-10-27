@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { patchStoredCase, readState, storageConfigured } from "../../../lib/blob-store";
 import { isAdmin } from "../../../lib/admin-auth";
 import { EDITABLE_STATUSES } from "../../../lib/types";
+import { definedCaseUpdate } from "../../../lib/case-update";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,8 @@ export async function PATCH(request: Request) {
     const body = await request.json() as { key?: string; status?: string; inScope?: boolean };
     if (!body.key) return NextResponse.json({ error: "Test case key is required." }, { status: 400 });
     if (body.status !== undefined && !EDITABLE_STATUSES.includes(body.status as typeof EDITABLE_STATUSES[number])) return NextResponse.json({ error: "Unsupported status." }, { status: 400 });
-    return NextResponse.json(await patchStoredCase(body.key, { status: body.status, inScope: body.inScope }));
+    const updates = definedCaseUpdate(body);
+    return NextResponse.json(await patchStoredCase(body.key, updates));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update test case." }, { status: 500 });
   }
