@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { combineApTemplateCases, mergeImportedCases, parseApTemplate, parsePacWorkbook } from "../lib/source-parser.ts";
+import { combineApTemplateCases, mergeImportedCases, parseApTemplate, parsePacWorkbook, prepareForPacWorkbookRefresh } from "../lib/source-parser.ts";
 import type { CertificationCase } from "../lib/types.ts";
 
 function pacWorkbook(rows: unknown[][], passedIds: string[] = []) {
@@ -95,13 +95,27 @@ test("a new AP row matching an existing PAC row marks both as mutual", () => {
   assert.equal(merged.find(item => item.key === pac.key)?.status, "Pass");
 });
 
-test("re-importing a row preserves its edited status and scope", () => {
+test("re-importing a row uses the uploaded status and scope", () => {
   const current = caseRow({ key: "AP:AP-NEW", certification: "AP", status: "Blocked", inScope: false });
   const imported = caseRow({ key: "AP:AP-NEW", certification: "AP", status: "Not Executed Yet", inScope: true, description: "Updated description" });
   const [merged] = mergeImportedCases([current], [imported]);
-  assert.equal(merged.status, "Blocked");
-  assert.equal(merged.inScope, false);
+  assert.equal(merged.status, "Not Executed Yet");
+  assert.equal(merged.inScope, true);
   assert.equal(merged.description, "Updated description");
+});
+
+test("PAC workbook refresh removes stale PAC rows and refreshes AP-only successes", () => {
+  const current = [
+    caseRow({ key: "PAC:OLD", testId: "OLD" }),
+    caseRow({ key: "AP:OLD", certification: "AP", testId: "OLD", category: "Mutual PAC/AP" }),
+    caseRow({ key: "AP:RE_01", certification: "AP", testId: "RE_01", category: "Remitter Bank", status: "Pass", inScope: false }),
+    caseRow({ key: "AP:BE_01", certification: "AP", testId: "BE_01", category: "Beneficiary Bank", status: "Blocked", inScope: false }),
+  ];
+  const prepared = prepareForPacWorkbookRefresh(current, new Set(["BE_01"]));
+  assert.equal(prepared.length, 2);
+  assert.equal(prepared.find(item => item.testId === "RE_01")?.status, "Not Executed Yet");
+  assert.equal(prepared.find(item => item.testId === "BE_01")?.status, "Pass");
+  assert.equal(prepared.every(item => item.inScope), true);
 });
 
 test("adding one row leaves unrelated existing rows unchanged", () => {
