@@ -1,7 +1,15 @@
 import * as XLSX from "xlsx";
-import { CUTOFF, type CertificationCase } from "./types.ts";
+import type { CertificationCase } from "./types.ts";
 
 const clean = (value: unknown) => value == null ? "" : String(value).trim();
+
+function explicitScope(value: unknown, status: string, testId: string) {
+  if (status.toLowerCase() === "not in scope") return false;
+  const scope = clean(value).toLowerCase();
+  if (!scope || ["yes", "y", "true", "1", "in scope"].includes(scope)) return true;
+  if (["no", "n", "false", "0", "out of scope", "not in scope"].includes(scope)) return false;
+  throw new Error(`Invalid In Scope value for ${testId}: ${clean(value)}. Use Yes or No.`);
+}
 
 function isoDate(value: unknown): string {
   if (value instanceof Date && !Number.isNaN(value.valueOf())) return value.toISOString().slice(0, 10);
@@ -53,6 +61,8 @@ export function parsePacWorkbook(buffer: ArrayBuffer, sourceFile: string) {
   if (clean(ap[0]?.[0]) !== "Test Case") throw new Error('"Our AP" must have Test Case in cell A1.');
 
   const passedApIds = new Set(ap.slice(1).map(row => clean(row[0])).filter(Boolean));
+  const mainHeaders = main[1].map(value => clean(value).toUpperCase());
+  const scopeCol = mainHeaders.findIndex(value => ["IN SCOPE", "SCOPE"].includes(value));
   const pac: CertificationCase[] = [];
   const seen = new Set<string>();
   main.slice(2).forEach((row, index) => {
@@ -61,12 +71,13 @@ export function parsePacWorkbook(buffer: ArrayBuffer, sourceFile: string) {
     if (seen.has(testId)) throw new Error(`Duplicate PAC Test ID: ${testId}`);
     seen.add(testId);
     const date = isoDate(row[0]);
+    const status = clean(row[4]) || "Not Executed Yet";
     const item = {
       ...baseCase("PAC", testId, sourceFile, index + 1),
       date,
       description: clean(row[3]),
-      status: clean(row[4]) || "Not Executed Yet",
-      inScope: Boolean(date && date <= CUTOFF),
+      status,
+      inScope: explicitScope(scopeCol >= 0 ? row[scopeCol] : "", status, testId),
       category: clean(row[6]),
       details: clean(row[2]),
       initiatedBy: clean(row[8]),
@@ -111,6 +122,7 @@ export function parseApTemplate(buffer: ArrayBuffer, sourceFile: string, passedI
   const detailsCol = col(["DETAILS"]), txnCol = col(["TXN STATUS"]), stepsCol = col(["TEST STEPS"]);
   const responseCol = col(["RESPONSE/ ERROR CODE", "RESPONSE / ERROR CODE"]), initiatedCol = col(["TXN INITIATED BY"]);
   const typeCol = col(["TYPE"]), commentsCol = col(["TEST COMMENTS"]);
+  const scopeCol = col(["IN SCOPE", "SCOPE"]);
   const category = sourceFile.toLowerCase().includes("beneficiary") ? "Beneficiary Bank" : sourceFile.toLowerCase().includes("remitter") ? "Remitter Bank" : "AP";
   const seen = new Set<string>();
   const cases: CertificationCase[] = [];
@@ -123,6 +135,7 @@ export function parseApTemplate(buffer: ArrayBuffer, sourceFile: string, passedI
       ...baseCase("AP", testId, sourceFile, index + 1),
       description: descCol >= 0 ? clean(row[descCol]) : "",
       status: passedIds.has(testId) ? "Pass" : "Not Executed Yet",
+      inScope: explicitScope(scopeCol >= 0 ? row[scopeCol] : "", "", testId),
       category,
       details: detailsCol >= 0 ? clean(row[detailsCol]) : "",
       txnStatus: txnCol >= 0 ? clean(row[txnCol]) : "",
