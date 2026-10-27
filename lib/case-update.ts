@@ -13,3 +13,9 @@ export function applyCaseUpdate<T extends { status: string; inScope: boolean }>(
   if (updates.inScope !== undefined) next.inScope = updates.inScope;
   return next;
 }
+
+export function restoreMissingScope<T extends { key: string; inScope?: boolean }>(cases: T[], defaultScopes: ReadonlyMap<string, boolean>): Array<T & { inScope: boolean }> {
+  return cases.map(item => typeof item.inScope === "boolean"
+    ? item as T & { inScope: boolean }
+    : { ...item, inScope: defaultScopes.get(item.key) ?? true });
+}
