@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       next = mergeImportedCases(base, cases);
     }
     if (form.get("mode") === "preview") return NextResponse.json({ summary: summarize(next), files: files.map(file => file.name) });
-    if (!storageConfigured()) return NextResponse.json({ error: "Connect a Vercel Blob store before applying imports." }, { status: 503 });
+    if (!storageConfigured()) return NextResponse.json({ error: "Connect Upstash Redis before applying imports." }, { status: 503 });
     await writeState(next);
     return NextResponse.json({ summary: summarize(next), files: files.map(file => file.name) });
   } catch (error) {

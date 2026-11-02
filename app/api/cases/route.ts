@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   if (!await isAdmin()) return NextResponse.json({ error: "Admin session required." }, { status: 401 });
-  if (!storageConfigured()) return NextResponse.json({ error: "Connect a Vercel Blob store before editing cases." }, { status: 503 });
+  if (!storageConfigured()) return NextResponse.json({ error: "Connect Upstash Redis before editing cases." }, { status: 503 });
   try {
     const body = await request.json() as { key?: string; status?: string; inScope?: boolean };
     if (!body.key) return NextResponse.json({ error: "Test case key is required." }, { status: 400 });

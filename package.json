@@ -11,10 +11,10 @@
     "start": "next start",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "storage:seed": "node scripts/seed-vercel-blob.mjs"
+    "storage:seed": "node scripts/seed-upstash.mjs"
   },
   "dependencies": {
-    "@vercel/blob": "^2.3.0",
+    "@upstash/redis": "^1.40.0",
     "lucide-react": "^1.31.0",
     "next": "16.3.4",
     "react": "19.2.6",

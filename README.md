@@ -5,17 +5,17 @@ A Next.js dashboard for tracking PAC and AP certification test cases. It provide
 ## Source rules
 
 - PAC is loaded from `Main Tracker`. Cases are in scope by default and are excluded only when explicitly marked out of scope.
-- AP contains all PAC cases plus the Beneficiary and Remitter templates.
-- IDs listed in `Our AP` start as `Pass`; all other AP cases start as `Not Executed Yet`.
-- PAC workbook imports replace the PAC catalog and use `Our AP` as the AP success list. AP-only Remitter and Beneficiary cases remain in the catalog.
+- AP is loaded independently from the `AP Tracker` sheet and contains the mutual, Remitter Bank, and Beneficiary Bank cases with their own status and scope.
+- PAC and AP imports replace only their respective certification catalog.
+- Matching PAC and AP Test IDs are marked as mutual and counted in both certifications.
 
 The bundled dataset is generated from the approved certification workbook and AP test-case templates. No sample or dummy test cases are included.
 
 ## Stack
 
 - Next.js 16 and React 19
-- Private Vercel Blob storage for the shared dashboard dataset
-- Immediate admin updates with a 30-second refresh for other viewers
+- Upstash Redis for the shared dashboard dataset
+- Immediate admin updates with a 60-second visible-tab refresh for other viewers
 - Signed, HTTP-only admin session cookie
 - Vercel deployment
 
@@ -27,9 +27,9 @@ The bundled dataset is generated from the approved certification workbook and AP
    pnpm install
    ```
 
-2. Create a private Blob store from the Vercel project's **Storage** tab and connect it to the project.
+2. Add **Upstash for Redis** from the Vercel project's **Storage** tab and connect it to the project.
 
-3. Copy `.env.example` to `.env.local` and provide all values. Keep `BLOB_READ_WRITE_TOKEN`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET` server-only.
+3. Copy `.env.example` to `.env.local` and provide all values. Keep the Redis credentials, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET` server-only.
 
 4. To seed the private store manually:
 
@@ -43,13 +43,14 @@ The bundled dataset is generated from the approved certification workbook and AP
    pnpm dev
    ```
 
-The dashboard opens with the approved bundled dataset and synchronizes with the connected private Blob store. Admin changes and imports require storage to be configured.
+The dashboard synchronizes with the connected Redis database. Admin changes and imports require storage to be configured.
 
 ## Environment variables
 
 | Variable | Exposure | Purpose |
 | --- | --- | --- |
-| `BLOB_READ_WRITE_TOKEN` | Server only | Local access and seeding for the connected private Blob store; Vercel can use its automatically configured project credentials in production |
+| `UPSTASH_REDIS_REST_URL` | Server only | REST endpoint for the connected Upstash Redis database |
+| `UPSTASH_REDIS_REST_TOKEN` | Server only | Authentication token for the connected Upstash Redis database |
 | `ADMIN_PASSWORD` | Server only | Shared administrator password |
 | `ADMIN_SESSION_SECRET` | Server only | Signs 12-hour admin session cookies; use at least 32 random characters |
 
@@ -60,15 +61,15 @@ The dashboard opens with the approved bundled dataset and synchronizes with the 
 3. Import one or more `.xlsx` or `.csv` files from **Admin controls**.
 4. Review the parsed totals before applying the import.
 
-The PAC workbook must contain `Main Tracker` and `Our AP`. AP CSVs must contain a `TEST ID` column and may use either `DESCRIPTION` or `TEST DESCRIPTION`.
+The PAC workbook must contain `Main Tracker`. The AP workbook must contain `AP Tracker`. Both require a Test ID column.
 
 ## Deploy to Vercel
 
 1. Push this directory to the target GitHub repository.
 2. Import the repository in Vercel as a Next.js project.
-3. Add `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` to Production and Preview environments. Connecting the Blob store supplies its Vercel credentials automatically.
+3. Add `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` to Production and Preview environments. Connecting Upstash supplies its Redis credentials automatically.
 4. Deploy.
-5. Seed the Blob store once from a trusted local machine, or sign in as admin and apply the three supplied source templates through the dashboard.
+5. Sign in as admin and apply the PAC and AP workbooks through the dashboard. Alternatively, seed Redis once from a trusted local machine.
 
 Vercel should use the default commands: `pnpm install`, `pnpm build`, and `pnpm start`.
 
