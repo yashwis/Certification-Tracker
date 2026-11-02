@@ -7,15 +7,24 @@ const DATA_KEY = "niubiz-certification:dashboard-state";
 const DATA_VERSION = "2026-10-27-explicit-scope-workbook";
 const DEFAULT_SCOPES = new Map((seed as CertificationCase[]).map(item => [item.key, item.inScope]));
 
+function redisCredentials() {
+  return {
+    url: process.env.UPSTASH_REDIS_REST_URL ?? process.env.UPSTASH_REDIS_REST_KV_REST_API_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN,
+  };
+}
+
 export function storageConfigured() {
-  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  const { url, token } = redisCredentials();
+  return Boolean(url && token);
 }
 
 function redisClient() {
-  if (!storageConfigured()) throw new Error("Upstash Redis is not connected.");
+  const { url, token } = redisCredentials();
+  if (!url || !token) throw new Error("Upstash Redis is not connected.");
   return new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    url,
+    token,
   });
 }
 
